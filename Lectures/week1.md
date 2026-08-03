@@ -81,4 +81,5 @@ LLM sinh văn bản theo vòng lặp autoregressive (tự hồi quy). Tức là 
 + Khi tự host, hai thứ ngốn VRAM lớn nhất là trọng số model (cố định) và KV cache (tăng theo ngữ cảnh + số request song song).
 
 ## 2.5. Note
-LLM chỉ đơn giản là tối ưu xác suất mà token tiếp theo có thể xuất hiện dựa trên các token đã được train trước đó.
++ LLM chỉ đơn giản là tối ưu xác suất mà token tiếp theo có thể xuất hiện dựa trên các token đã được train trước đó.
++ Temperature: Làm phẳng/nhọn phân bố xác suất
