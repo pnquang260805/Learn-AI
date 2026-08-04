@@ -83,3 +83,45 @@ LLM sinh văn bản theo vòng lặp autoregressive (tự hồi quy). Tức là 
 ## 2.5. Note
 + LLM chỉ đơn giản là tối ưu xác suất mà token tiếp theo có thể xuất hiện dựa trên các token đã được train trước đó.
 + Temperature: Làm phẳng/nhọn phân bố xác suất
+
+# Bài 3: Các họ mô hình mở (Llama, Mistral, Qwen, Gemma) và giấy phép sử dụng
+## 3.1. "Open-weight" khác "open-source thực thụ" thế nào?
++ Open-source thực thụ (OSI-approved): dùng license như Apache 2.0 hoặc MIT. Bạn được dùng thương mại thoải mái, sửa đổi, phân phối lại, gần như không ràng buộc (chỉ cần giữ thông báo bản quyền). Mistral, Qwen (dòng open) và Gemma (một phần) đi theo hướng thoáng này.
++ Open-weight có điều kiện (custom license): nhà phát triển tự viết giấy phép riêng, kèm điều khoản hạn chế. Ví dụ kinh điển là Llama Community License của Meta.
+
+__⚠️ Cảnh báo:__ “tải được trọng số” KHÔNG đồng nghĩa “được thương mại hóa tự do”. Luôn đọc file LICENSE trong repo mô hình trước khi đưa vào sản phẩm bán tiền.
+
+## 3.2. Các giấy phép
+<i><u><b>TRƯỚC KHI SỬ DỤNG 1 MODEL MỞ NÀO CHO PRODUCT CẦN ĐỌC KĨ LICENSE</b></u></i>
+### 3.2.1. Cách xem giấy phép
+1. Vào trang web của huggingface
+2. Vào mục `Files and versions`
+3. Vào file `README.md` để xem license
+
+<img src="../images/License.png">
+
+### 3.2.2. Các giấy phép
+#### Apache 2.0
+
+<a src="https://www.apache.org/licenses/LICENSE-2.0">Apache 2.0</a>
+
++ Mã nguồn không cần công khai khi phần mềm được phân phối.
++ Có thể sử dụng phần mềm được cấp license này hoặc các sản phẩm phái sinh từ phần mềm này cho mục đích thương mại
++ Tự do sử dụng, phân phối và sửa đổi
++ Giấy phép Apache không yêu cầu các bản sửa đổi phải phân phối lại dưới cùng một giấy phép. Tuy nhiên, bạn phải giữ lại thông báo về giấy phép Apache và quyền sở hữu trí tuệ.
+
+<img src="../images/license_loc.png">
+<img src="../images/license_example.png">
+
+Khi thêm các license vào work thì chỉ cần copy nguyên nội dung trên mạng mà nhà cung cấp license công bố vào 1 file `LICENSE` là được.
+
+#### MIT
+
+
+Copyright \<YEAR> \<COPYRIGHT HOLDER>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
