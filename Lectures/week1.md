@@ -126,3 +126,65 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  
+# Bài 4: GPU, VRAM, CUDA, hệ sinh thái Hugging Face
+## 4.1. CUDA
+   NGĂN XẾP TÍNH TOÁN GPU (từ dưới lên trên):
+
+   [ Mã của bạn / Hugging Face transformers ]<br>
+   [ PyTorch (bản build kèm CUDA)           ]<br>
+   [ Bộ công cụ CUDA (CUDA Toolkit)         ]<br>
+   [ Driver GPU NVIDIA                       ]<br>
+   [ Phần cứng GPU (VRAM + lõi)              ]<br>
+
++ Không cần cài đặt `CUDA toolkits` riêng khi cài `PyTorch`
+
+## 4.2. Hệ sinh thái Hugging Face
+|Thư viện|Vai trò|Dùng khi nào|
+|--------|-------|------------|
+|transfomers|Nạp/chạy mô hình, tokenizer|Inference, fine-tune|
+|datasets|Náp/xử lý dữ liệu huấn luyện|Chuẩn bị datasets|
+|peft|LoRA/QLoRA|Fine-tune hiệu quả (QLoRA, LoRA)|
+|trl|STFTrainer, DPOTrainer|Fine-tune có giám sát|
+|accelerate|Chạy tự động  trên GPU/CPU|Tối ưu train|
+|bitsandbytes|Lượng tử hóa 4-bits/8-bits|QLoRA, card yếu|
+
+## 4.3. Note
++ ❌ “GPU mạnh là chạy được mô hình lớn.” → ✅ Sai. `VRAM` mới quyết định nạp nổi mô hình lớn tới đâu; GPU nhanh mà VRAM nhỏ vẫn `out of memory`.
++ ❌ “Fine-tune tốn VRAM y như inference.” → ✅ Sai hẳn. Full fine-tune cần thêm gradient + optimizer state, ngốn gấp nhiều lần; đó là lý do có LoRA/QLoRA.
++ ❌ “torch.cuda.is_available() = False nghĩa là máy không có GPU.” → ✅ Thường do cài nhầm bản PyTorch chỉ CPU hoặc driver cũ.
+
+# Bài 5: Chạy inference cơ bản với Hugging Face Transformers
+## 5.1. Khái niệm
++ `Inference` là lúc mô hình đã __học xong__, chúng ta chỉ đưa __input__ để mô hình đưa ra __output__, không cập nhật trọng số. Chế độ PyTorch `mode.eval()`
++ `Training` là quá trình mô hình đang học. Nó xem dữ liệu, tính sai số, cập nhật trọng số và cần lưu gradient. Chế độ PyTorch `model.train()`
+
+## 5.2. Cách làm
+### Pipeline
++ Là một lớp trừu tượng giúp sử dụng nhanh các mô hình pretrained cho các tác vụ NLP/CV/audio phổ biến (phân loại văn bản, NER, dịch, sinh văn bản, phân loại ảnh...) mà không cần xử lý thủ công tokenizer, model, hay bước hậu xử lý.
++ Ưu điểm:
+    + Dễ dùng, code ít
+    + Không cần tải thủ công các thành phần như tokenizer, model, ...
++ Nhược điểm:
+    + Kém linh hoạt
+    + Khó debug
+
+Dùng trong quá trình `inference` chứ không dùng trong quá trình `training`
+
+### AutoTokenizer và AutoModelForCausalLM
+Khi cần kiểm soát chi tiết, ta bỏ `pipeline` và làm thủ công từng bước:
+1. Mã hóa input
+2. Sinh token mới (cho output)
+3. Giải mã token mới sinh từ vector số sang plaintext để con người có thể đọc được
+
+## 5.3. Apply chat template
++ Gộp (concat) các tin nhắn trong danh sách messages (bao gồm system, user, assistant) theo đúng thứ tự lịch sử hội thoại.
++ Chèn thêm các token đặc biệt (special tokens) tương ứng với vai trò của từng đoạn (role indicators, dấu phân cách lượt thoại, thẻ đóng/mở).
++ Thêm thẻ kích hoạt lượt trả lời ở cuối chuỗi nếu add_generation_prompt=True (để "mồi" cho mô hình biết cần đóng vai assistant và viết tiếp).
+
+<img src="../images/image.png">
+<img src="../images/image 2.png">
+
+## 5.4. Note
++ “Chạy inference thì model học thêm từ câu hỏi của tôi.” -> ✅ Sai. Inference không cập nhật trọng số; model chỉ đọc prompt và sinh output. Muốn nó “học” phải fine-tune.
++  “Đặt temperature cao là đủ để output sáng tạo.” -> ✅ Không. temperature chỉ có tác dụng khi do_sample=True; thiếu cờ này model vẫn chạy greedy và bỏ qua temperature.
++ Với model chat, __LUÔN__ dùng `apply_chat_template` + `input dạng danh sách messages`, đừng ghép prompt bằng tay.
