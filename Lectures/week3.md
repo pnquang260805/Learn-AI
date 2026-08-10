@@ -60,3 +60,56 @@ Thay vì tự ghép bằng tay thì ta để `tokenizer` tự lo bằng cách s�
 
 ## 2.2. Loss masking: chỉ chấm bài trên phần assistant nói
 SFTTrainer hỗ trợ điều này qua tham số assistant_only_loss (khi dataset ở định dạng chat và chat template có đánh dấu vùng assistant). Bật nó lên giúp model tập trung học cách trả lời, không phí công học lại câu hỏi.
+
+# Bài 3: Chất lượng dữ liệu
+## 3.1. Ví dụ về clean data
+Lấy content trong các tag của HTML $\rightarrow$ lọc bỏ các mẫu rỗng, quá ngắn (thường là vô nghĩa) hoặc quá dài (tốn token, vượt context)
+
+## 3.2. Khử trùng lặp
+Có 2 loại dedup:
++ Exact dedup: hai mẫu có kí tự giống hệt nhau
++ Near-dedup: dựa trên similarity
+
+### Near-dedup
+Ở đây sử dụng `MinHash`
+
+Thuật toán `MinHash`:
++ Dùng để ước lượng nhanh độ tương tự Jaccard giữa 2 tập hợp lớn mà không cần so sánh trực tiếp
++ Jaccard: $J(A,B)=\frac{|A\cap B|}{|A\cup B|}$
++ Hàm băm $H(x)=ax+b$ với $a, b$ là 2 tham số ngẫu nhiên thay đổi qua từng lần chạy
+
+Quy trình:
+1. Tạo tập hợp từ văn bản (Shingling): tách văn bản thành tập hợp với các thành phần có $k$ phần tử. Ví dụ câu: `con mèo trèo cây cau` với $k=2$ ta sẽ có: `{con mèo, mèo trèo, trèo cây, cây cau}`. Hàm băm: $h_{min}(A)=\min_{x\in A}h_i(x)$. Tính chất: $P(h_{min}(A)=h_{min}(B))=J(A,B)$
+2. Tạo ma trận đặc trưng: là ma trận có kiểu như hình dưới
+
+<img src="../images/shingles.png">
+3. ???????????????????????????????????
+
+
+### Note
+Với các dataset nhỏ (dưới vài nghìn dòng) thì chỉ cần exact dedup là đủ
+
+## 3.3. Quy trình chung cho xử lý dữ liệu huấn luyện
+```mermaid
+flowchart TD
+    A[Dữ liệu thô<br>raw.jsonl] --> B[Làm sạch]
+    B -->|Bỏ rác HTML, chuẩn hóa khoảng trắng| C[Lọc]
+    C -->|Bỏ mẫu rỗng / quá ngắn / quá dài| D[Khử trùng lặp]
+    D -->|Exact + near-dup MinHash| E[Chia tách]
+    E -->|train_test_split<br>test_size=0.1, seed=42| F[train.jsonl]
+    E -->|train_test_split<br>test_size=0.1, seed=42| G[val.jsonl]
+
+    F & G --> H[Nạp vào SFTTrainer / Đánh giá]
+```
+
+|Tỉ lệ split thường dùng|Use case|
+|-----------------------|--------|
+|90-10|Mặc định phổ biến cho fine-tune LLM|
+|95-5|Dataset lớn, muốn tận dụng tối đa cho train|
+|80-20|Dataset nhỏ, cần validation đủ mẫu để tin cậy|
+
+Luôn đặt `seed` cố định để mỗi lần chạy chia y hệt nhau - điều kiện tiên quyết để so sánh công bằng (reproducibility).
+
+SAI:  raw -> split -> dedup(train), dedup(val) (bản trùng giữa train và val vẫn lọt -> LEAKAGE)
+
+ĐÚNG: raw -> clean -> DEDUP toàn bộ -> SPLIT (đã bỏ trùng trên toàn tập trước khi tách)
