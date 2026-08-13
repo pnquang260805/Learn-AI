@@ -66,4 +66,57 @@ save_pretrained lưu adapter nhẹ.
 
  Sau train, save_pretrained chỉ lưu adapter (thường vài chục MB), KHÔNG lưu lại cả model 7B. Khi dùng lại, bạn nạp model gốc rồi “dán” adapter lên. Chuyện merge adapter vào model và chạy inference sẽ học kỹ ở Bài 3 và các bài serving sau.
 
-# Unsloth
+# Note
+Card T4 chỉ train quanh quanh 0.0x it/s nên làm project thì chịu khó xì tiền ra thôi
+
+# Bài 4: Theo dõi huấn luyện: loss, overfitting và Weights & Biases
+## 4.1. Loss
+|Thuật ngữ|Ý nghĩa|Mong muốn|
+|-|-|-|
+|Train loss|Sai số trên tập huấn luyện|Giảm dần, mượt|
+|Validation loss|Sai số trên tập kiểm định|Giảm dần theo train loss|
+
+## 4.2. Đường cong overfitting và underfitting
+### Học tổt
++ Cả 2 loss cùng giảm và bám sát nhau
+
+<img src="../images/good.png">
+
+### Underfitting
++ Cả 2 loss đề đang rất cao, giảm chậm
++ Do rank LoRA quá nhỏ, learning rate quá thấp hoặc train quá ít
+
+<img src="../images/underfitting.png">
+
+### Overfitting
++ Training loss vẫn giảm nhưng validation loss chững lại rồi tăng trở lại
+<img src="../images/overfitting.png">
+
+## 4.3. Weights & Biases: bảng đồng hồ tự động, chia sẻ được
++ Weight & Biases là dịch vụ ghi lại log và trực quan hóa huấn luyện
++ Mọi metric sẽ được đẩy lên dashboard web
++ <a src="https://wandb.ai/site">Cài đặt và đăng nhập</a>
+
+Điều tuyệt vời với Hugging Face: không cần viết code logging thủ công. Chỉ cần thêm report_to="wandb" vào chính SFTConfig ở mục 3, trainer tự đẩy mọi metric lên W&B:
+
+Chỉ cần cài pip `wandb` và chạy `wandb login` rồi thêm `report_to="wandb"` vào `SFTConfig` là xong
+
+## 4.4. Early stopping: dừng đúng lúc trước khi học vẹt
++ Dùng để dừng quá trình train ngay trước khi gặp overfitting
++ Hugging Face có sẵn EarlyStoppingCallback: nếu val loss không cải thiện sau một số lần đánh giá liên tiếp, trainer tự dừng.
++ Kết hợp `EarlyStoppingCallback` với `load_best_model_at_end=True` là bộ đôi kinh điển: trainer vừa dừng khi hết cải thiện, vừa nạp lại checkpoint tốt nhất - không bao giờ vô tình giữ model đã overfit ở cuối.
+
+```
+from transformers import EarlyStoppingCallback
+
+trainer = SFTTrainer(
+    model=model,
+    args=training_args,
+    train_dataset=dataset["train"],
+    eval_dataset=dataset["validation"],
+    # Stop if eval_loss does not improve for 3 consecutive evaluations
+    callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
+)
+trainer.train()
+```
+`early_stopping_patience` là số lần đánh giá (eval), không phải số bước train. Nó chỉ có tác dụng khi đã bật eval_strategy="steps" và metric_for_best_model="eval_loss".
