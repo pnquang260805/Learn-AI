@@ -167,3 +167,17 @@ tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
 tokenizer.save_pretrained("./llama-3.2-3b-mytune-merged")
 ```
 
+```
+Load base model in fp16
+        |
+        v
+Attach LoRA adapter
+        |
+        v
+Merge and unload
+        |
+        v
+    Save model
+```
+
+Lưu ý: nếu train bằng unsloth thì cách lưu sẽ hơi khác chút. Xem file `` để hiểu hơn
