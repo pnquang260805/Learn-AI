@@ -99,7 +99,10 @@ Card T4 chỉ train quanh quanh 0.0x it/s nên làm project thì chịu khó xì
 
 Điều tuyệt vời với Hugging Face: không cần viết code logging thủ công. Chỉ cần thêm report_to="wandb" vào chính SFTConfig ở mục 3, trainer tự đẩy mọi metric lên W&B:
 
-Chỉ cần cài pip `wandb` và chạy `wandb login` rồi thêm `report_to="wandb"` vào `SFTConfig` là xong
+Chỉ cần cài pip `wandb` và chạy `wandb login` rồi thêm `report_to="wandb"` và thêm `dataset_text_field = "text",` vào `SFTConfig` là xong
+
+<img src="../images/wb.png">
+Ví dụ dashboard của weight and bias
 
 ## 4.4. Early stopping: dừng đúng lúc trước khi học vẹt
 + Dùng để dừng quá trình train ngay trước khi gặp overfitting
@@ -120,3 +123,47 @@ trainer = SFTTrainer(
 trainer.train()
 ```
 `early_stopping_patience` là số lần đánh giá (eval), không phải số bước train. Nó chỉ có tác dụng khi đã bật eval_strategy="steps" và metric_for_best_model="eval_loss".
+
+# Bài 5: Gộp adapter (merge), lưu và chia sẻ mô hình lên Hugging Face Hub
++ LoRA chỉ sinh ra adapter, không phải cả mô hình
+## 5.1. Khi nào merge adapter, khi nào giữ tách rời
+|Tiêu chí|Giữ adapter tách rời|Merge vào base|
+|-|-|-|
+|Dung lượng lưu|Rất nhỏ|Bằng cả mô hình gốc|
+|Đổi/gộp nhiều adapter|Dễ|Không thể vì nó đã fix cứng vào model|
+|Độ trễ suy luận|Thêm 1 chút overhead cho $BA$|Nhanh nhất|
+|Chuyển sang GGUF/Ollama/vLLM|Thường phải merge trước|Có thể chuyển đổi ngay|
+|Phù hợp khi|Còn thử nghiệm hoặc có nhiều task khác nhau|Production|
+## 5.2. Merge adapter vào base bằng `merge_and_unload()`
++ Không được merge trên trọng số 4-bit
++ Đừng quên tokenizer
+
+```
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from peft import PeftModel
+
+BASE_MODEL = "meta-llama/Llama-3.2-3B-Instruct"   # the frozen base model
+ADAPTER_DIR = "./outputs/lora-adapter"            # folder produced by SFTTrainer
+
+# 1) Load the base model in fp16 (merging must NOT be done in 4-bit / quantized weights)
+base = AutoModelForCausalLM.from_pretrained(
+    BASE_MODEL,
+    torch_dtype=torch.float16,
+    device_map="auto",
+)
+
+# 2) Attach the trained LoRA adapter on top of the base model
+model = PeftModel.from_pretrained(base, ADAPTER_DIR)
+
+# 3) Fold B*A into W and drop the LoRA layers -> a plain standalone model
+merged = model.merge_and_unload()
+
+# 4) Save the merged model in the safetensors format (safe + fast to load)
+merged.save_pretrained("./llama-3.2-3b-mytune-merged", safe_serialization=True)
+
+# 5) The tokenizer MUST be saved next to the model, otherwise it is unusable
+tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
+tokenizer.save_pretrained("./llama-3.2-3b-mytune-merged")
+```
+
