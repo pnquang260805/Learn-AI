@@ -162,3 +162,77 @@ model = AutoModelForCausalLM.from_pretrained(
 )
 ```
 AWQ thường cho tốc độ suy luận cao và chất lượng giữ rất tốt ở 4-bit, đặc biệt được vLLM (bạn sẽ học ở tuần sau) hỗ trợ để serving throughput cao.
+
+# Bài 3: Đưa mô hình fine-tuned vào Ollama (chuyển đổi và import GGUF)
+Pipeline
+```
+   SƠ ĐỒ PIPELINE: fine-tuned -> Ollama
+   ────────────────────────────────────────────────
+
+   [ Base model (HF) ] + [ LoRA adapter (outputs/) ]
+                     │
+                     ▼
+   (1) GỘP: merge_and_unload()    -> merged (Safetensors)
+                     │
+                     ▼
+   (2) CONVERT: convert_hf_to_gguf -> model-f16.gguf
+                     │
+                     ▼
+   (3) QUANTIZE: llama-quantize    -> model-q4.gguf
+                     │
+                     ▼
+   (4) MODELFILE: FROM + TEMPLATE + PARAMETER
+                     │
+                     ▼
+   (5) ollama create  ->  ollama run
+```
+1. Merge model: làm như trong file `Merge_model.ipynb`
+2. Convert sang GGUF
+    1. git clone https://github.com/ggml-org/llama.cpp & pip install -r llama.cpp/requirements.txt
+    2. python llama.cpp/convert_hf_to_gguf.py `<path_to_saved_model>`  --outtype f16 --outfile `<file name>.gguf`
+3. Lượng tử hóa GGUF
+    1. cmake -B build llama.cpp && cmake --build build --config Release
+    2. ./build/bin/llama-quantize `<before>.gguf` `<quantized>.gguf` `<mức lượng tử>`
+4. Viết modelfile và ollama create
+Ví dụ modelfile
+```
+# Modelfile - blueprint Ollama uses to build the model
+FROM ./model-q4_k_m.gguf
+
+# System prompt: persona / instructions for the assistant
+SYSTEM """You are a helpful assistant fine-tuned for customer support in Vietnamese."""
+
+# Sampling parameters
+PARAMETER temperature 0.7
+PARAMETER top_p 0.9
+PARAMETER num_ctx 4096
+
+# Chat template must match the base model's chat format (Llama 3 example)
+TEMPLATE """{{ if .System }}<|start_header_id|>system<|end_header_id|>
+
+{{ .System }}<|eot_id|>{{ end }}<|start_header_id|>user<|end_header_id|>
+
+{{ .Prompt }}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+"""
+```
+
+Các mức lượng tử hóa GGUF
+|Mức|Kích thước|Chất lượng|Dùng khi|
+|-|-|-|-|
+|Q8_0|Lớn|Gần như không đổi|Còn nhiều VRAM, cần chất lượng cao|
+|Q5_K_M|Vừa|Rất tốt|Cân bằng nhưng cần nghiêng về chất lượng|
+|Q4_K_M|Nhỏ|Tốt, mất rất ít|Mặc định phổ biến nhất|
+|Q3_K_M|Rát nhỏ|Suy giảm rõ|Máy yếu, chấp nhận đánh đổi|
+
+<img src="../images/gguf thường và q4_km.png">
+
+Chạy modelfile: Tạo file tên `Modelfile` (không đuôi) cạnh file GGUF và
+```
+# Build the Ollama model from the Modelfile in the current directory
+ollama create my-support-bot -f Modelfile
+```
+
+## Note
++ Thực tế thường merge rồi convert sang GGUF để cho tiện
++ Nên gộp (merge) adapter ở độ chính xác cao (f16/bf16) rồi mới lượng tử hóa. Merge ở f16/bf16 trước, rồi mới quantize xuống 4-bit (GGUF, Q4_K_M...) — đây là luồng chuẩn và được khuyến nghị (Unsloth, llama.cpp, HF đều theo cách này):
