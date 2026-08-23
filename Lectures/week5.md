@@ -236,3 +236,63 @@ ollama create my-support-bot -f Modelfile
 ## Note
 + Thực tế thường merge rồi convert sang GGUF để cho tiện
 + Nên gộp (merge) adapter ở độ chính xác cao (f16/bf16) rồi mới lượng tử hóa. Merge ở f16/bf16 trước, rồi mới quantize xuống 4-bit (GGUF, Q4_K_M...) — đây là luồng chuẩn và được khuyến nghị (Unsloth, llama.cpp, HF đều theo cách này):
+
+# Bài 4: Preference tuning: DPO và làm quen với RLHF
+## 4.1. Flow huấn luyện
+```
+   Luồng RLHF (3 bước)
+
+   [Bước 1: SFT]   Mô hình SFT (đã biết trả lời)
+        |
+        v
+   [Bước 2: Reward Model]
+        - Con người xếp hạng các câu trả lời (chosen > rejected)
+        - Huấn luyện một mô hình "chấm điểm" (reward model)
+        |
+        v
+   [Bước 3: RL - PPO]
+        Mô hình chính  --sinh câu trả lời-->  Reward Model chấm điểm
+              ^                                      |
+              |______  PPO cập nhật trọng số  <______|
+        (ràng buộc KL để không trôi quá xa mô hình SFT gốc)
+```
+Vòng PPO (Proximal Policy Optimization) cập nhật trọng số còn có cách gọi khác là vòng RL
+## 4.2. DPO (Direct Preference Optimization)
++ Vấn đề của Reforcement Learning:
+    + Phải có 1 reward model để chấm điểm
+    + Tốn cost
++ DPO:
+    + Biến bài toán thành 1 hàm loss đơn giản rồi tối ưu trực tiếp hàm đó
+
+Hàm loss:
+$$
+l_{DPO}=-log_{\sigma}(\beta log \frac{\pi_{\theta}(y_w|x)}{\pi_{ref}(y_w | x)}- \beta log \frac{\pi_{\theta}(y_l|x)}{\pi_{ref}(y_l | x)})
+$$
+Với:
++ $x$: câu prompt
++ $y_w$: câu được chọn
++ $y_l$: câu bị loại
++ $\pi_\theta$: mô hình đang huấn luyện
++ $\pi_{ref}$: mô hình tham chiếu (bản SFT đóng băng)
+
+Tóm lại `Loss ép mô hình ưa câu choosen hơn câu rejected`
+
+## 4.3. Ví dụ dataset
+```json
+{
+    "prompt": "Giải thích HTTP là gì cho người mới bắt đầu.",
+    "chosen": "HTTP là giao thức để trình duyệt và máy chủ trao đổi dữ liệu web...",   
+    "rejected": "HTTP là một thứ gì đó liên quan đến internet, khó giải thích.",       
+}
+```
+
+## 4.4. Note
++ ❌ “DPO thay thế SFT.” → ✅ Sai. DPO là bước sau SFT; bạn SFT trước để mô hình biết trả lời, rồi mới DPO để tinh chỉnh theo sở thích.
++ ❌ “beta càng nhỏ càng học tốt.” → ✅ Không hẳn. beta nhỏ cho học mạnh nhưng dễ khiến mô hình trôi xa bản tham chiếu, hỏng giọng, overfit; cần cân bằng, thường bắt đầu quanh 0.1
+
+Cách đọc bảng log DPO:
+<img src="../images/DPO.png">
+
++ loss có giảm dần không
++ rewards/accuracies có tăng dần lên trên 50% không
++ rewards/margins có tăng dần và dương lên không
