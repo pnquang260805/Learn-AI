@@ -109,7 +109,7 @@ Ví dụ dashboard của weight and bias
 + Hugging Face có sẵn EarlyStoppingCallback: nếu val loss không cải thiện sau một số lần đánh giá liên tiếp, trainer tự dừng.
 + Kết hợp `EarlyStoppingCallback` với `load_best_model_at_end=True` là bộ đôi kinh điển: trainer vừa dừng khi hết cải thiện, vừa nạp lại checkpoint tốt nhất - không bao giờ vô tình giữ model đã overfit ở cuối.
 
-```
+```python
 from transformers import EarlyStoppingCallback
 
 trainer = SFTTrainer(
@@ -138,7 +138,7 @@ trainer.train()
 + Không được merge trên trọng số 4-bit
 + Đừng quên tokenizer
 
-```
+```python
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
