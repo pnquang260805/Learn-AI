@@ -296,3 +296,85 @@ Cách đọc bảng log DPO:
 + loss có giảm dần không
 + rewards/accuracies có tăng dần lên trên 50% không
 + rewards/margins có tăng dần và dương lên không
+
+# Bài 5: Các sai lầm thường gặp: catastrophic forgetting, overfitting và cách khắc phục
+## 5.1. Catastrophic forgetting
++ Là khi model học nhiệm vụ mới nhưng quên mất năng lực tổng quát đã có
+    + Ví dụ: Fine-tune tiếng Việt nhưng tiếng Anh bị kém đi
+
+## 5.2. Overfitting
+```
+   Loss
+    │
+    │\                         <- val loss bắt đầu TĂNG = overfitting
+    │ \____                   /
+    │      \______           /   <- validation loss (dữ liệu chưa thấy)
+    │             \_________ /
+    │                       \____________  <- train loss (vẫn giảm đều)
+    │
+    └───────────────────────────────────────> số epoch
+          ^                ^
+       vùng tốt        điểm nên DỪNG (early stopping)
+```
+## 5.3. Các kỹ thuật tránh catastrophic forgetting và overfitting
++ Trong `SFTConfig`:
+    + Bật `load_best_model_at_end`
+    + Để LR thấp
+    + `eval_strategy="steps"`
+
++ Trong SFTTrainer bật early stopping: `callbacks=[EarlyStoppingCallback(early_stopping_patience=3)]` (`EarlyStoppingCallback` nằm trong `transformer`)
+
+```python
+from datasets import load_dataset
+from transformers import EarlyStoppingCallback
+from trl import SFTTrainer, SFTConfig
+
+# Split dataset into train/validation so we can watch generalization
+dataset = load_dataset("json", data_files="instructions.jsonl", split="train")
+splits = dataset.train_test_split(test_size=0.1, seed=42)
+train_ds, eval_ds = splits["train"], splits["test"]
+
+args = SFTConfig(
+    output_dir="./out",
+    num_train_epochs=3,            # keep epochs low to avoid over-training
+    learning_rate=2e-4,            # small LR reduces forgetting
+    eval_strategy="steps",         # evaluate periodically on the eval set
+    eval_steps=50,
+    save_strategy="steps",
+    save_steps=50,
+    load_best_model_at_end=True,   # roll back to the best (lowest eval loss) checkpoint
+    metric_for_best_model="eval_loss",
+    greater_is_better=False,
+)
+
+trainer = SFTTrainer(
+    model="meta-llama/Llama-3.1-8B",
+    args=args,
+    train_dataset=train_ds,
+    eval_dataset=eval_ds,
+    # Stop if eval loss does not improve for 3 consecutive evaluations
+    callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
+)
+trainer.train()
+```
++ `eval_strategy="steps" + eval_steps=50`: cứ 50 bước lại chấm điểm trên tập eval, cho ta đường validation loss theo thời gian.
++ `load_best_model_at_end=True + metric_for_best_model="eval_loss"`: sau khi train xong, tự động quay về checkpoint có validation loss thấp nhất - không giữ bản đã overfit ở cuối.
+
+## 5.4. Vì sao LoRA/QLoRA giảm nhẹ hiện tượng quên?
+```
+   Full fine-tune:            LoRA:
+   ┌───────────┐              ┌───────────┐   (đóng băng, GIỮ NGUYÊN)
+   │  W (train)│              │  W (frozen)│
+   │  cập nhật │              └─────┬─────┘
+   │  TOÀN BỘ  │                    │  +
+   └───────────┘              ┌─────┴─────┐
+   -> dễ đè lên               │  B x A    │  <- CHỈ học phần nhỏ này
+      kiến thức cũ            │ (hạng thấp)│
+                              └───────────┘
+                              -> W gốc còn nguyên -> ít quên hơn
+```
+
+Vì trọng số $W$ ban đầu được giữ nguyên nên kiến thức pre-training không bị ghi đè trực tiếp mà chỉ được điều chỉnh nhẹ bằng ma trận $BA$
+## 5.5. Note
++ Dùng LoRA không bị catastrophic forgetting mà chỉ làm giảm. Nếu LR/rank/epoch quá cao vẫn gây ra quên
++ Bắt buộc phải có eval set
