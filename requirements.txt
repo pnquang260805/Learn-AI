@@ -1,9 +1,2 @@
 python-dotenv
-peft
-transformers
-unsloth
-bitsandbytes
-accelerate
-unsloth_zoo
-huggingface_hub
 tqdm
